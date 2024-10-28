@@ -1,0 +1,144 @@
+E html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOP</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000; /* Dark background inspired by naTV.css */
+        }
+    </style>
+    <!-- Load Three.js CDN here -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/FlyControls.js"></script>
+</head>
+<body>
+<canvas id="starfield"></canvas>
+
+<script type="x-shader/x-vertex" id="vertexShader">
+    uniform float pointSize;
+    uniform float time;
+    varying vec3 vColor;
+    
+    void main() {
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = pointSize * (300.0 / -mvPosition.z); // Size of particles based on depth
+        gl_Position = projectionMatrix * mvPosition;
+        vColor = color;
+    }
+</script>
+
+<script type="x-shader/x-fragment" id="fragmentShader">
+    varying vec3 vColor;
+
+    void main() {
+        float dist = distance(gl_PointCoord, vec2(0.5));
+        if (dist > 0.5) discard; // Create a circular particle shape
+
+        gl_FragColor = vec4(vColor, 1.0);
+    }
+</script>
+
+<script>
+    let scene, camera, renderer, stars, starGeo, starMaterial;
+    const starCount = 3000;
+    const naTVColors = ['#00C3FF', '#CF19B9', '#FFD700', '#39FF14']; // Vibrant colors from naTV.css
+    const starSpeed = 0.2;
+    const canvas = document.getElementById('starfield');
+
+    // Initialize Three.js
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ canvas: canvas });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    var ambientLight = new THREE.AmbientLight(0x404040, 1.5); // Soft ambient light
+    scene.add(ambientLight);
+
+    var directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5, 10, 7.5);
+    scene.add(directionalLight);
+
+    // Create star geometry and add random positions for the stars
+    starGeo = new THREE.BufferGeometry();
+    let positions = new Float32Array(starCount * 3);
+    let colors = new Float32Array(starCount * 3);
+
+    for (let i = 0; i < starCount; i++) {
+        // Random star positions
+        positions[i * 3] = (Math.random() - 0.5) * 1000;
+        positions[i * 3 + 1] = (Math.random() - 0.5) * 1000;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 1000;
+
+        // Assign random vibrant color to each star
+        let color = new THREE.Color(naTVColors[Math.floor(Math.random() * naTVColors.length)]);
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+    }
+
+    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    // Create custom star material using shaders
+    starMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            pointSize: { value: 2.0 },
+            time: { value: 1.0 }
+        },
+        vertexShader: document.getElementById('vertexShader').textContent,
+        fragmentShader: document.getElementById('fragmentShader').textContent,
+        transparent: true,
+        depthTest: false,
+        vertexColors: true,
+    });
+
+    // Create points (particles) and add to the scene
+    stars = new THREE.Points(starGeo, starMaterial);
+    scene.add(stars);
+
+    var controls = new THREE.FlyControls(camera);
+        controls.movementSpeed = 10;  // Set the speed of movement
+        controls.domElement = (camera, renderer.domElement);
+        controls.rollSpeed = Math.PI / 0.05;  // Roll sensitivity
+        controls.autoForward = false;
+        controls.dragToLook = true;
+
+        // Position the camera
+        //camera.position.set(0, 10, 5);
+
+    camera.position.z = 300;
+
+    // Render loop
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // Update starfield
+        let positions = starGeo.attributes.position.array;
+        for (let i = 0; i < starCount; i++) {
+            positions[i * 3 + 2] += starSpeed; // Move stars toward the camera
+            if (positions[i * 3 + 2] > 300) {
+                positions[i * 3 + 2] = -300; // Reset star position once it goes past the camera
+            }
+        }
+        starGeo.attributes.position.needsUpdate = true;
+
+        controls.update(0.01);
+
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Handle window resize
+    window.addEventListener('resize', function () {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+    });
+</script>
+</body>
+</html>
